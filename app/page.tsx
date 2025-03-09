@@ -1,101 +1,263 @@
-import Image from "next/image";
+"use client";
+import { useState } from "react";
 
-export default function Home() {
+type QuestionType = "emoji" | "scale" | "text";
+
+interface Question {
+  id: string;
+  question: string;
+  type: QuestionType;
+  // Para emojis, se puede usar string[]
+  // Para escalas, se puede usar { [key: number]: string }
+  options?: string[] | { [key: number]: string };
+  min?: number;
+  max?: number;
+  // Esta propiedad indica si la pregunta tendrá un campo adicional de texto
+  allowExtraInfo?: boolean;
+}
+
+// Configuración de las preguntas del formulario dinámico
+const questions: Question[] = [
+  {
+    id: "mood",
+    question: "¿Cómo te sientes hoy?",
+    type: "emoji",
+    options: ["😊", "😔", "😠", "😯", "😟"],
+  },
+  {
+    id: "sleep",
+    question: "¿Cómo dormiste hoy?",
+    type: "scale",
+    min: 1,
+    max: 3,
+    options: { 1: "Mal", 2: "Regular", 3: "Bien" },
+    allowExtraInfo: true,
+  },
+  {
+    id: "notes",
+    question: "¿Qué fue lo más relevante de tu día?",
+    type: "text",
+  },
+];
+
+// Componente de formulario dinámico
+function DynamicForm({ onFinish }: { onFinish: () => void }) {
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<{ [key: string]: any }>({});
+
+  const currentQuestion = questions[currentQuestionIndex];
+
+  const handleAnswer = (value: any) => {
+    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: value }));
+  };
+
+  const handleNext = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Si no es la última pregunta, pasamos a la siguiente
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+    } else {
+      // Última pregunta: guardamos los datos y avisamos al componente padre
+      localStorage.setItem("dynamicFormData", JSON.stringify(answers));
+      console.log("Datos del formulario dinámico:", answers);
+      onFinish();
+    }
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <form onSubmit={handleNext} className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <label className="font-medium text-gray-900">
+          {currentQuestion.question}
+        </label>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+        {/* Tipo EMOJI */}
+        {currentQuestion.type === "emoji" &&
+          Array.isArray(currentQuestion.options) && (
+            <div className="flex gap-2">
+              {currentQuestion.options.map((emoji, index) => (
+                <label
+                  key={index}
+                  className="cursor-pointer flex flex-col items-center"
+                >
+                  <input
+                    type="radio"
+                    name={currentQuestion.id}
+                    value={emoji}
+                    checked={answers[currentQuestion.id] === emoji}
+                    onChange={() => handleAnswer(emoji)}
+                    className="hidden"
+                  />
+                  <span
+                    className={`text-2xl p-2 border rounded ${
+                      answers[currentQuestion.id] === emoji
+                        ? "bg-blue-200"
+                        : "bg-gray-100"
+                    }`}
+                  >
+                    {emoji}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+
+        {/* Tipo SCALE (con inputs de radio) */}
+        {currentQuestion.type === "scale" &&
+          currentQuestion.min !== undefined &&
+          currentQuestion.max !== undefined &&
+          currentQuestion.options && (
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-4">
+                {Array.from(
+                  { length: currentQuestion.max - currentQuestion.min + 1 },
+                  (_, i) => currentQuestion.min! + i
+                ).map((num) => {
+                  const labelText =
+                    typeof currentQuestion.options === "object" &&
+                    currentQuestion.options[num]
+                      ? `${num} (${currentQuestion.options[num]})`
+                      : `${num}`;
+                  return (
+                    <label
+                      key={num}
+                      className="flex items-center space-x-2 text-gray-900"
+                    >
+                      <input
+                        type="radio"
+                        name={currentQuestion.id}
+                        value={num}
+                        checked={answers[currentQuestion.id] === num}
+                        onChange={() => handleAnswer(num)}
+                      />
+                      <span>{labelText}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {/* Texto adicional (opcional) */}
+              {currentQuestion.allowExtraInfo && (
+                <div className="mt-2">
+                  <label className="block font-medium text-gray-900 mb-1">
+                    Información adicional (opcional)
+                  </label>
+                  <textarea
+                    placeholder="Cuéntanos más..."
+                    className="border rounded p-2 text-gray-900 w-full"
+                    value={answers[`${currentQuestion.id}_extra`] || ""}
+                    onChange={(e) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        [`${currentQuestion.id}_extra`]: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+        {/* Tipo TEXT */}
+        {currentQuestion.type === "text" && (
+          <textarea
+            className="border rounded p-2 text-gray-900"
+            value={answers[currentQuestion.id] || ""}
+            onChange={(e) => handleAnswer(e.target.value)}
+          />
+        )}
+      </div>
+
+      <button
+        type="submit"
+        className="bg-blue-500 text-white rounded p-2 hover:bg-blue-600 transition-colors disabled:opacity-50"
+        disabled={!answers[currentQuestion.id]}
+      >
+        {currentQuestionIndex < questions.length - 1 ? "Siguiente" : "Finalizar"}
+      </button>
+    </form>
+  );
+}
+
+// Componente principal
+export default function Home() {
+  const [dayMood, setDayMood] = useState("");
+  const [submitted, setSubmitted] = useState(false); // Controla si se respondió la pregunta inicial
+  const [finishedForm, setFinishedForm] = useState(false); // Controla si se terminó el formulario dinámico
+
+  // Al enviar la primera pregunta
+  const handleInitialSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const data = { dayMood, timestamp: new Date().toISOString() };
+    localStorage.setItem("emotionsData", JSON.stringify(data));
+    console.log("Datos iniciales almacenados:", data);
+    setSubmitted(true);
+  };
+
+  // Callback para cuando el formulario dinámico termina
+  const handleFinishForm = () => {
+    setFinishedForm(true);
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-gray-50">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">
+          App Emociones &amp; Bienestar
+        </h1>
+      </header>
+      <main className="w-full max-w-md bg-white p-6 rounded-lg shadow text-gray-900">
+        {/* Paso 1: Pregunta inicial */}
+        {!submitted && !finishedForm && (
+          <>
+            <div className="mb-6 text-center">
+              <p className="mt-4 text-xl">
+                ¡Hola! Qué gusto tenerte aquí hoy. Cuéntame, ¿cómo estuvo tu día?
+              </p>
+            </div>
+            <form onSubmit={handleInitialSubmit} className="flex flex-col gap-4">
+              <input
+                type="text"
+                placeholder="Describe tu día..."
+                value={dayMood}
+                onChange={(e) => setDayMood(e.target.value)}
+                className="border rounded p-2 text-gray-900"
+                required
+              />
+              <button
+                type="submit"
+                className="bg-blue-500 text-white rounded p-2 hover:bg-blue-600 transition-colors"
+              >
+                Guardar y Continuar
+              </button>
+            </form>
+          </>
+        )}
+
+        {/* Paso 2: Formulario dinámico (preguntas una a una) */}
+        {submitted && !finishedForm && (
+          <>
+            <div className="mb-6 text-center">
+              <p className="mt-4 text-xl">
+                Ahora completa las siguientes preguntas:
+              </p>
+            </div>
+            <DynamicForm onFinish={handleFinishForm} />
+          </>
+        )}
+
+        {/* Pantalla final de agradecimiento */}
+        {finishedForm && (
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-4">
+              ¡Gracias por completar el formulario!
+            </h2>
+            <p className="text-lg">
+              Tu información ha sido registrada. ¡Que tengas un excelente día!
+            </p>
+          </div>
+        )}
       </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
